@@ -1,0 +1,709 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="kjh">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="本文记录了使用libbpf开发ebpf程序的基本流程与程序框架 libbpf程序的基本框架内核态程序在内核态程序中,最重要的就是其中的探针程序,大体的架构如下(命名为 名称.bpf.c): 12345678910111213141516171819202122232425262728293031323334#include &quot;vmlinux.h&quot;#include &lt;bpf">
+<meta property="og:type" content="article">
+<meta property="og:title" content="libbpf学习">
+<meta property="og:url" content="http://example.com/2023/08/29/libbpf%E5%AD%A6%E4%B9%A0/index.html">
+<meta property="og:site_name" content="kjh&#39;s Blog">
+<meta property="og:description" content="本文记录了使用libbpf开发ebpf程序的基本流程与程序框架 libbpf程序的基本框架内核态程序在内核态程序中,最重要的就是其中的探针程序,大体的架构如下(命名为 名称.bpf.c): 12345678910111213141516171819202122232425262728293031323334#include &quot;vmlinux.h&quot;#include &lt;bpf">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2023-08-29T12:01:21.000Z">
+<meta property="article:modified_time" content="2023-08-29T13:35:58.675Z">
+<meta property="article:author" content="kjh">
+<meta property="article:tag" content="ebpf libbpf">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+  
+  <title>libbpf学习 - kjh&#39;s Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"example.com","root":"/","version":"1.9.5-a","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"><link rel="alternate" href="/atom.xml" title="kjh's Blog" type="application/atom+xml">
+</head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>Fluid</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="libbpf学习"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2023-08-29 20:01" pubdate>
+          2023年8月29日 晚上
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          9.4k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          78 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">libbpf学习</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <p>本文记录了使用libbpf开发ebpf程序的基本流程与程序框架</p>
+<h1 id="libbpf程序的基本框架"><a href="#libbpf程序的基本框架" class="headerlink" title="libbpf程序的基本框架"></a>libbpf程序的基本框架</h1><h2 id="内核态程序"><a href="#内核态程序" class="headerlink" title="内核态程序"></a>内核态程序</h2><p>在内核态程序中,最重要的就是其中的探针程序,大体的架构如下(命名为 名称.bpf.c):</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;vmlinux.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;bpf/bpf_helpers.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;bpf/bpf_tracing.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;bpf/bpf_core_read.h&gt;</span></span><br><span class="hljs-comment">//内核中的许可证</span><br><span class="hljs-type">char</span> LICENSE[] SEC(<span class="hljs-string">&quot;license&quot;</span>) = <span class="hljs-string">&quot;Dual BSD/GPL&quot;</span>;<br><span class="hljs-comment">//Map的定义,用来存储数据与将数据运送到用户态</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>	__uint(type, BPF_MAP_TYPE_HASH);<br>    __type(key, __u32);<br>    __type(value, <span class="hljs-type">int</span>);<br>    __uint(max_entries, <span class="hljs-number">1024</span> * <span class="hljs-number">16</span>);<br>	__uint(map_flags,BPF_MAP_CREATE);<br>&#125;my_bpf_map <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br><br><span class="hljs-comment">//探针程序</span><br>SEC(<span class="hljs-string">&quot;kprobe/do_unlinkat&quot;</span>)<span class="hljs-comment">//定义程序的节</span><br><span class="hljs-type">int</span> <span class="hljs-title function_">BPF_KPROBE</span><span class="hljs-params">(do_unlinkat, <span class="hljs-type">int</span> dfd, <span class="hljs-keyword">struct</span> filename *name)</span>&#123;<span class="hljs-comment">//BPF_KPROBE是一个宏</span><br>  																											第一个参数是系统调用的名字,后面																												是系统调用的参数<br>	<span class="hljs-type">int</span> pid = bpf_get_current_pid_tgid() &gt;&gt; <span class="hljs-number">32</span>;<br>	__u32 key=<span class="hljs-number">0</span>;<br>	<span class="hljs-type">int</span>* value;<br>	__u32 count = <span class="hljs-number">0</span>;<br>	value = (<span class="hljs-type">int</span>*)bpf_map_lookup_elem(&amp;my_bpf_map, &amp;key);<br>	<span class="hljs-keyword">if</span>(value)&#123;<br>		bpf_printk(<span class="hljs-string">&quot;count: %d\n&quot;</span>,value);<br>		*value+=<span class="hljs-number">1</span>;<br>		bpf_map_update_elem(&amp;my_bpf_map, &amp;key, value, BPF_ANY);<br>	&#125;<span class="hljs-keyword">else</span>&#123;<br>		bpf_map_update_elem(&amp;my_bpf_map, &amp;key, &amp;count, BPF_ANY);<br>	&#125;<br>	bpf_printk(<span class="hljs-string">&quot;WRITE ENTRY pid = %d \n&quot;</span>, pid);<br>	<span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h2 id="用户态程序"><a href="#用户态程序" class="headerlink" title="用户态程序"></a>用户态程序</h2><p>用户态程序主要是用来加载内核态程序到内核中,同时也是将探针获取的数据作处理的地方,基本的结构如下(命名为 名称.c):</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;stdio.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;unistd.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;sys/resource.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;bpf/libbpf.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;test.skel.h&quot;</span><span class="hljs-comment">//这个是bpftool使用内核态程序生成的骨架文件</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span><span class="hljs-string">&lt;bpf/bpf.h&gt;</span></span><br><span class="hljs-comment">//定义一个输出的回调函数,后面会用到</span><br><span class="hljs-type">static</span> <span class="hljs-type">int</span> <span class="hljs-title function_">libbpf_print_fn</span><span class="hljs-params">(<span class="hljs-keyword">enum</span> libbpf_print_level level, <span class="hljs-type">const</span> <span class="hljs-type">char</span> *format, va_list args)</span><br>&#123;<br>	<span class="hljs-keyword">return</span> <span class="hljs-built_in">vfprintf</span>(<span class="hljs-built_in">stderr</span>, format, args);<br>&#125;<br><br><span class="hljs-type">int</span> <span class="hljs-title function_">main</span><span class="hljs-params">()</span>&#123;<br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">test_bpf</span> *<span class="hljs-title">skel</span>;</span><span class="hljs-comment">//内核态程序对象,test是这个文件的名字</span><br>    <span class="hljs-type">int</span> err;<br><br>    libbpf_set_print(libbpf_print_fn);<br><br>    skel = test_bpf__open();<span class="hljs-comment">//打开</span><br>    <span class="hljs-keyword">if</span> (!skel) &#123;<br>		<span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">&quot;Failed to open BPF skeleton\n&quot;</span>);<br>		<span class="hljs-keyword">return</span> <span class="hljs-number">1</span>;<br>	&#125;<br>    err = test_bpf__load(skel);<span class="hljs-comment">//加载</span><br>	<span class="hljs-keyword">if</span> (err) &#123;<br>		<span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">&quot;Failed to load and verify BPF skeleton\n&quot;</span>);<br>		<span class="hljs-keyword">goto</span> cleanup;<br>	&#125;<br>    err = test_bpf__attach(skel);<span class="hljs-comment">//装载</span><br>	<span class="hljs-keyword">if</span> (err) &#123;<br>		<span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">&quot;Failed to attach BPF skeleton\n&quot;</span>);<br>		<span class="hljs-keyword">goto</span> cleanup;<br>	&#125;<br><br>	<span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` &quot;</span><br>	       <span class="hljs-string">&quot;to see output of the BPF programs.\n&quot;</span>);<br><br>	<span class="hljs-keyword">for</span> (;;) &#123;<span class="hljs-comment">//这一段用来处理从内核态获得到的数据</span><br>		<span class="hljs-comment">/* trigger our BPF program */</span><br>		<span class="hljs-type">int</span> map_fd = bpf_map__fd(skel-&gt;maps.my_bpf_map);<br>		<span class="hljs-type">int</span> value = <span class="hljs-number">0</span>;<br>		__u32 key = <span class="hljs-number">0</span>;<br>		bpf_map_lookup_elem(map_fd,&amp;key,&amp;value);<br><br><br>		<span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">&quot;value:%d&quot;</span>,value);<br>		sleep(<span class="hljs-number">1</span>);<br>	&#125;<br><br>cleanup:<span class="hljs-comment">//用来清理</span><br>	test_bpf__destroy(skel);<br>	<span class="hljs-keyword">return</span> -err;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+
+
+<h2 id="整体编译流程"><a href="#整体编译流程" class="headerlink" title="整体编译流程"></a>整体编译流程</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs sh">NAME=<span class="hljs-built_in">test</span><br>clang -g -O2 -target bpf -D__TARGET_ARCH_x86 -I/usr/src/kernels/$(<span class="hljs-built_in">uname</span> -r)/include/uapi/ -I/usr/src/kernels/$(<span class="hljs-built_in">uname</span> -r)/include/ -I/usr/include/bpf/ -c <span class="hljs-variable">$NAME</span>.bpf.c -o <span class="hljs-variable">$NAME</span>.bpf.o &amp;&amp; \ <span class="hljs-comment">#编译test.bpf.c</span><br>bpftool gen skeleton <span class="hljs-variable">$NAME</span>.bpf.o &gt; <span class="hljs-variable">$NAME</span>.skel.h&amp;&amp; \ <span class="hljs-comment">#根据test.bpf.o生成骨架文件</span><br>gcc -I/usr/src/kernels/$(<span class="hljs-built_in">uname</span> -r)/include/uapi/ -I/usr/src/kernels/$(<span class="hljs-built_in">uname</span> -r)/include/ -I/usr/include/bpf/ -c <span class="hljs-variable">$NAME</span>.c -o <span class="hljs-variable">$NAME</span>.o&amp;&amp; <span class="hljs-comment">#编译test.c 得到test.o</span><br>gcc <span class="hljs-variable">$NAME</span>.o -lbpf -lelf -lz -o <span class="hljs-variable">$NAME</span> <span class="hljs-comment">#使用test.o生成可执行文件</span><br></code></pre></td></tr></table></figure>
+
+
+
+
+
+<h1 id="内核数据到用户态的传递"><a href="#内核数据到用户态的传递" class="headerlink" title="内核数据到用户态的传递"></a>内核数据到用户态的传递</h1><h2 id="使用Map"><a href="#使用Map" class="headerlink" title="使用Map"></a>使用Map</h2><p><strong>map的定义</strong>:</p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs reasonml"><span class="hljs-keyword">struct</span> &#123;<br>	<span class="hljs-constructor">__uint(<span class="hljs-params">type</span>, BPF_MAP_TYPE_HASH)</span>;<span class="hljs-comment">//定义map的类型</span><br>    <span class="hljs-constructor">__type(<span class="hljs-params">key</span>, <span class="hljs-params">__u32</span>)</span>;<span class="hljs-comment">//定义key的类型</span><br>    <span class="hljs-constructor">__type(<span class="hljs-params">value</span>, <span class="hljs-params">int</span>)</span>;<span class="hljs-comment">//定义value的类型</span><br>    <span class="hljs-constructor">__uint(<span class="hljs-params">max_entries</span>, 1024 <span class="hljs-operator">*</span> 16)</span>;<span class="hljs-comment">//定义map的大小</span><br>	<span class="hljs-constructor">__uint(<span class="hljs-params">map_flags</span>,BPF_MAP_CREATE)</span>;<br>&#125;my_bpf_map <span class="hljs-constructor">SEC(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br></code></pre></td></tr></table></figure>
+
+<p>map的类型有很多种,<a target="_blank" rel="noopener" href="http://arthurchiao.art/blog/bpf-advanced-notes-2-zh/#1-bpf_map_type_hash">具体可以看这里</a></p>
+<p><strong>map的使用:</strong></p>
+<p>1.根据key查看元素:<br><code>value = (int*)bpf_map_lookup_elem(&amp;my_bpf_map, &amp;key);</code></p>
+<p>2.参数为map与key的指针,返回value的指针<br>更新元素:<br><code>bpf_map_update_elem(&amp;my_bpf_map, &amp;key, value, BPF_ANY);</code></p>
+<p>参数为map,key,value的指针,最后一个参数是标志位:<br>BPF_ANY：如果键已存在，则更新其对应的值。如果键不存在，则插入一个新的键值对。<br>BPF_NOEXIST：只有当键不存在时才插入一个新的键值对。如果键已存在，则插入操作会失败。<br>BPF_EXIST：只有当键已存在时才更新其对应的值。如果键不存在，则更新操作会失败。</p>
+<p>3.遍历map:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">while</span> (bpf_map_get_next_key(map_fd, &amp;key, &amp;next_key) == <span class="hljs-number">0</span>) &#123;<br>       <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;Next key: %u\n&quot;</span>, next_key);<br>       key = next_key;<br>  &#125;<br></code></pre></td></tr></table></figure>
+
+<p><code>bpf_map_get_next_key</code>函数用于获取BPF映射表中的下一个键。它接受三个参数：当前键<code>key</code>、下一个键<code>next_key</code>和映射表描述符<code>map_fd</code>。</p>
+<p>具体使用方法如下：</p>
+<ol>
+<li>在调用<code>bpf_map_get_next_key</code>之前，需要先将<code>key</code>设置为要查找的起始键，可以是任何合法的键。如果要获取第一个键，可以将<code>key</code>设置为0或其他适当的值。</li>
+<li>调用<code>bpf_map_get_next_key(map_fd, &amp;key, next_key)</code>，将映射表描述符<code>map_fd</code>、当前键<code>key</code>和一个用于保存下一个键的变量<code>next_key</code>作为参数传递给函数。</li>
+<li>如果函数调用成功，并且存在下一个键，则<code>next_key</code>将被更新为下一个键的值。如果不再有下一个键，则<code>next_key</code>将保持不变，即其值与<code>key</code>相同。</li>
+<li>可以通过循环多次调用<code>bpf_map_get_next_key</code>，每次都更新<code>key</code>和<code>next_key</code>的值，以遍历整个映射表的键。</li>
+</ol>
+<h2 id="使用ringbuffer"><a href="#使用ringbuffer" class="headerlink" title="使用ringbuffer"></a>使用ringbuffer</h2><p><strong>内核态:</strong></p>
+<p>首先在内核态程序定义一个ringbuffer</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>	__uint(type, BPF_MAP_TYPE_RINGBUF);<br>	__uint(max_entries, <span class="hljs-number">256</span> * <span class="hljs-number">1024</span> <span class="hljs-comment">/* 256 KB */</span>);<br>&#125; rb <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br></code></pre></td></tr></table></figure>
+
+<p>在内核态程序发送数据</p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs reasonml"><span class="hljs-built_in">int</span> bpf<span class="hljs-constructor">_ringbuf_output(<span class="hljs-params">struct</span> <span class="hljs-params">ring_buffer</span> <span class="hljs-operator">**</span><span class="hljs-params">rbp</span>, <span class="hljs-params">void</span> <span class="hljs-operator">*</span><span class="hljs-params">data</span>, <span class="hljs-params">size_t</span> <span class="hljs-params">data_size</span>, <span class="hljs-params">int</span> <span class="hljs-params">flags</span>)</span>;<br></code></pre></td></tr></table></figure>
+
+<ul>
+<li><code>rbp</code>：指向指针的指针，用于传递环形缓冲区的指针。该函数会更新该指针，使其指向已更新的环形缓冲区。</li>
+<li><code>data</code>：指向要写入环形缓冲区的数据的指针。</li>
+<li><code>data_size</code>：要写入的数据的大小（字节数）。</li>
+<li><code>flags</code>：标志位，用于指定写入操作的行为和属性。可以是以下值之一：<ul>
+<li><code>0</code>：默认标志，表示使用默认设置进行写入操作。</li>
+<li><code>RINGBUF_F_RELOCATION</code>：允许在运行时重新定位环形缓冲区的位置。</li>
+</ul>
+</li>
+</ul>
+<p>例子</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;linux/bpf.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;bpf/bpf_helpers.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;common.h&quot;</span></span><br><br><span class="hljs-type">char</span> LICENSE[] SEC(<span class="hljs-string">&quot;license&quot;</span>) = <span class="hljs-string">&quot;Dual BSD/GPL&quot;</span>;<br><br><span class="hljs-comment">/* BPF ringbuf map */</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>	__uint(type, BPF_MAP_TYPE_RINGBUF);<br>	__uint(max_entries, <span class="hljs-number">256</span> * <span class="hljs-number">1024</span> <span class="hljs-comment">/* 256 KB */</span>);<br>&#125; rb <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br><br><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);<br>	__uint(max_entries, <span class="hljs-number">1</span>);<br>	__type(key, <span class="hljs-type">int</span>);<br>	__type(value, <span class="hljs-keyword">struct</span> event);<br>&#125; heap <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br><br>SEC(<span class="hljs-string">&quot;tp/sched/sched_process_exec&quot;</span>)<br><span class="hljs-type">int</span> <span class="hljs-title function_">handle_exec</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> trace_event_raw_sched_process_exec *ctx)</span><br>&#123;<br>	<span class="hljs-type">unsigned</span> fname_off = ctx-&gt;__data_loc_filename &amp; <span class="hljs-number">0xFFFF</span>;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">event</span> *<span class="hljs-title">e</span>;</span><br>	<span class="hljs-type">int</span> zero = <span class="hljs-number">0</span>;<br>	<br>	e = bpf_map_lookup_elem(&amp;heap, &amp;zero);<br>	<span class="hljs-keyword">if</span> (!e) <span class="hljs-comment">/* can&#x27;t happen */</span><br>		<span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br><br>	e-&gt;pid = bpf_get_current_pid_tgid() &gt;&gt; <span class="hljs-number">32</span>;<br>	bpf_get_current_comm(&amp;e-&gt;comm, <span class="hljs-keyword">sizeof</span>(e-&gt;comm));<br>	bpf_probe_read_str(&amp;e-&gt;filename, <span class="hljs-keyword">sizeof</span>(e-&gt;filename), (<span class="hljs-type">void</span> *)ctx + fname_off);<br><br>	bpf_ringbuf_output(&amp;rb, e, <span class="hljs-keyword">sizeof</span>(*e), <span class="hljs-number">0</span>);<br>	<span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><strong>用户态:</strong></p>
+<p>在用户态接收数据:</p>
+<p>在attach探针后,在用户态程序创建一个rb对象:</p>
+<p><code>rb = ring_buffer__new(bpf_map__fd(skel-&gt;maps.rb), handle_event, NULL, NULL);</code></p>
+<p>函数的原型为;</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c">ring_buffer *<span class="hljs-title function_">ring_buffer__new</span><span class="hljs-params">(<span class="hljs-type">int</span> map_fd, ring_buffer_sample_fn sample_cb, <span class="hljs-type">void</span> *ctx, <span class="hljs-type">const</span> <span class="hljs-keyword">struct</span> ring_buffer_opts *opts)</span>;<br></code></pre></td></tr></table></figure>
+
+<p><code>ring_buffer__new</code> 函数的参数如下：</p>
+<ul>
+<li><code>map_fd</code>：映射表的文件描述符，用于将环形缓冲区与 BPF 映射表关联起来。环形缓冲区可以捕获内核事件，并将其存储在关联的映射表中。通常，这是使用 <code>bpf_create_map</code> 函数创建的 BPF_MAP_TYPE_RINGBUF 类型的映射表。</li>
+<li><code>sample_cb</code>：环形缓冲区采样回调函数，用于处理从环形缓冲区读取的数据。每当从环形缓冲区读取到新数据时，该回调函数将被调用。它接受三个参数：事件数据、事件数据大小和用户上下文指针。</li>
+<li><code>ctx</code>：用户上下文指针，可用于在回调函数中传递额外的上下文信息。可以是指向结构体或其他自定义数据的指针。</li>
+<li>opts：环形缓冲区选项，用于配置环形缓冲区的行为和属性。<code>struct ring_buffer_opts</code>是一个结构体，可以设置以下字段：<ul>
+<li>flags：标志位，用于指定环形缓冲区的行为，可以是以下值之一：<ul>
+<li><code>0</code>：默认标志，表示使用默认设置创建环形缓冲区。</li>
+<li><code>RINGBUFFER_RELOCATION</code>：允许在运行时重新定位环形缓冲区的位置。</li>
+</ul>
+</li>
+<li><code>frame_cnt</code>：环形缓冲区的帧数，即环形缓冲区可以保存的最大事件数。</li>
+<li><code>frame_size</code>：每个事件的大小（字节数），也可以理解为每个帧的大小。</li>
+</ul>
+</li>
+</ul>
+<p><strong>回调函数</strong>的原型为:<code>int (*ring_buffer_sample_fn)(void *ctx, void *data, size_t size);</code>例子:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">int</span> <span class="hljs-title function_">handle_event</span><span class="hljs-params">(<span class="hljs-type">void</span> *ctx, <span class="hljs-type">void</span> *data, <span class="hljs-type">size_t</span> data_sz)</span><br>&#123;<br>	<span class="hljs-type">const</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">event</span> *<span class="hljs-title">e</span> =</span> data;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">tm</span> *<span class="hljs-title">tm</span>;</span><br>	<span class="hljs-type">char</span> ts[<span class="hljs-number">32</span>];<br>	<span class="hljs-type">time_t</span> t;<br><br>	time(&amp;t);<br>	tm = localtime(&amp;t);<br>	strftime(ts, <span class="hljs-keyword">sizeof</span>(ts), <span class="hljs-string">&quot;%H:%M:%S&quot;</span>, tm);<br><br>	<span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;%-8s %-5s %-7d %-16s %s\n&quot;</span>, ts, <span class="hljs-string">&quot;EXEC&quot;</span>, e-&gt;pid, e-&gt;comm, e-&gt;filename);<br><br>	<span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>随后在一个while循环里调用</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c">err = ring_buffer__poll(rb, <span class="hljs-number">100</span> <span class="hljs-comment">/* timeout, ms */</span>);<br></code></pre></td></tr></table></figure>
+
+
+
+<p>用户态完整例子:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)</span><br><span class="hljs-comment">// Copyright (c) 2020 Andrii Nakryiko</span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;errno.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;signal.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;stdio.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;time.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;sys/resource.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;bpf/libbpf.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;common.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;ring.skel.h&quot;</span></span><br><br><span class="hljs-type">int</span> <span class="hljs-title function_">libbpf_print_fn</span><span class="hljs-params">(<span class="hljs-keyword">enum</span> libbpf_print_level level, <span class="hljs-type">const</span> <span class="hljs-type">char</span> *format, va_list args)</span><br>&#123;<br>	<span class="hljs-comment">/* Ignore debug-level libbpf logs */</span><br>	<span class="hljs-keyword">if</span> (level &gt; LIBBPF_INFO)<br>		<span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>	<span class="hljs-keyword">return</span> <span class="hljs-built_in">vfprintf</span>(<span class="hljs-built_in">stderr</span>, format, args);<br>&#125;<br><br><span class="hljs-type">void</span> <span class="hljs-title function_">bump_memlock_rlimit</span><span class="hljs-params">(<span class="hljs-type">void</span>)</span><br>&#123;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">rlimit</span> <span class="hljs-title">rlim_new</span> =</span> &#123;<br>		.rlim_cur	= RLIM_INFINITY,<br>		.rlim_max	= RLIM_INFINITY,<br>	&#125;;<br><br>	<span class="hljs-keyword">if</span> (setrlimit(RLIMIT_MEMLOCK, &amp;rlim_new)) &#123;<br>		<span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">&quot;Failed to increase RLIMIT_MEMLOCK limit!\n&quot;</span>);<br>		<span class="hljs-built_in">exit</span>(<span class="hljs-number">1</span>);<br>	&#125;<br>&#125;<br><br><span class="hljs-type">static</span> <span class="hljs-keyword">volatile</span> <span class="hljs-type">bool</span> exiting = <span class="hljs-literal">false</span>;<br><br><span class="hljs-type">static</span> <span class="hljs-type">void</span> <span class="hljs-title function_">sig_handler</span><span class="hljs-params">(<span class="hljs-type">int</span> sig)</span><br>&#123;<br>	exiting = <span class="hljs-literal">true</span>;<br>&#125;<br><br><span class="hljs-type">int</span> <span class="hljs-title function_">handle_event</span><span class="hljs-params">(<span class="hljs-type">void</span> *ctx, <span class="hljs-type">void</span> *data, <span class="hljs-type">size_t</span> data_sz)</span><br>&#123;<br>	<span class="hljs-type">const</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">event</span> *<span class="hljs-title">e</span> =</span> data;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">tm</span> *<span class="hljs-title">tm</span>;</span><br>	<span class="hljs-type">char</span> ts[<span class="hljs-number">32</span>];<br>	<span class="hljs-type">time_t</span> t;<br><br>	time(&amp;t);<br>	tm = localtime(&amp;t);<br>	strftime(ts, <span class="hljs-keyword">sizeof</span>(ts), <span class="hljs-string">&quot;%H:%M:%S&quot;</span>, tm);<br><br>	<span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;%-8s %-5s %-7d %-16s %s\n&quot;</span>, ts, <span class="hljs-string">&quot;EXEC&quot;</span>, e-&gt;pid, e-&gt;comm, e-&gt;filename);<br><br>	<span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br><br><span class="hljs-type">int</span> <span class="hljs-title function_">main</span><span class="hljs-params">(<span class="hljs-type">int</span> argc, <span class="hljs-type">char</span> **argv)</span><br>&#123;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">ring_buffer</span> *<span class="hljs-title">rb</span> =</span> <span class="hljs-literal">NULL</span>;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">ring_bpf</span> *<span class="hljs-title">skel</span>;</span><br>	<span class="hljs-type">int</span> err;<br><br>	<span class="hljs-comment">/* Set up libbpf logging callback */</span><br>	libbpf_set_print(libbpf_print_fn);<br><br>	<span class="hljs-comment">/* Bump RLIMIT_MEMLOCK to create BPF maps */</span><br>	bump_memlock_rlimit();<br><br>	<span class="hljs-comment">/* Clean handling of Ctrl-C */</span><br>	signal(SIGINT, sig_handler);<br>	signal(SIGTERM, sig_handler);<br><br>	<span class="hljs-comment">/* Load and verify BPF application */</span><br>	skel = ring_bpf__open_and_load();<br>	<span class="hljs-keyword">if</span> (!skel) &#123;<br>		<span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">&quot;Failed to open and load BPF skeleton\n&quot;</span>);<br>		<span class="hljs-keyword">return</span> <span class="hljs-number">1</span>;<br>	&#125;<br><br>	<span class="hljs-comment">/* Attach tracepoint */</span><br>	err = ring_bpf__attach(skel);<br>	<span class="hljs-keyword">if</span> (err) &#123;<br>		<span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">&quot;Failed to attach BPF skeleton\n&quot;</span>);<br>		<span class="hljs-keyword">goto</span> cleanup;<br>	&#125;<br><br>	<span class="hljs-comment">/* Set up ring buffer polling */</span><br>	rb = ring_buffer__new(bpf_map__fd(skel-&gt;maps.rb), handle_event, <span class="hljs-literal">NULL</span>, <span class="hljs-literal">NULL</span>);<br>	<span class="hljs-keyword">if</span> (!rb) &#123;<br>		err = <span class="hljs-number">-1</span>;<br>		<span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">&quot;Failed to create ring buffer\n&quot;</span>);<br>		<span class="hljs-keyword">goto</span> cleanup;<br>	&#125;<br><br>	<span class="hljs-comment">/* Process events */</span><br>	<span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;%-8s %-5s %-7s %-16s %s\n&quot;</span>,<br>	       <span class="hljs-string">&quot;TIME&quot;</span>, <span class="hljs-string">&quot;EVENT&quot;</span>, <span class="hljs-string">&quot;PID&quot;</span>, <span class="hljs-string">&quot;COMM&quot;</span>, <span class="hljs-string">&quot;FILENAME&quot;</span>);<br>	<span class="hljs-keyword">while</span> (!exiting) &#123;<br>		err = ring_buffer__poll(rb, <span class="hljs-number">100</span> <span class="hljs-comment">/* timeout, ms */</span>);<br>		<span class="hljs-comment">/* Ctrl-C will cause -EINTR */</span><br>		<span class="hljs-keyword">if</span> (err == -EINTR) &#123;<br>			err = <span class="hljs-number">0</span>;<br>			<span class="hljs-keyword">break</span>;<br>		&#125;<br>		<span class="hljs-keyword">if</span> (err &lt; <span class="hljs-number">0</span>) &#123;<br>			<span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;Error polling ring buffer: %d\n&quot;</span>, err);<br>			<span class="hljs-keyword">break</span>;<br>		&#125;<br>	&#125;<br><br>cleanup:<br>	ring_buffer__free(rb);<br>	ring_bpf__destroy(skel);<br><br>	<span class="hljs-keyword">return</span> err &lt; <span class="hljs-number">0</span> ? -err : <span class="hljs-number">0</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+
+
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/ebpf-libbpf/" class="print-no-link">#ebpf libbpf</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>libbpf学习</div>
+      <div>http://example.com/2023/08/29/libbpf学习/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>kjh</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2023年8月29日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2023/07/20/test/" title="这是一篇测试的文章">
+                        <span class="hidden-mobile">这是一篇测试的文章</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
